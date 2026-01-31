@@ -54,25 +54,25 @@ type
   Message*[T] = ref object of AbstractMessage
     payload*: T
 
-  Msg* = object
+  PluginMessages* = object
     queue: seq[AbstractMessage]
 
-proc init*(T: typedesc[Msg]): T =
+proc init*(T: typedesc[PluginMessages]): T =
   T(queue: @[])
 
-proc send*[T](msg: var Msg, payload: T) =
+proc send*[T](msg: var PluginMessages, payload: T) =
   let m = Message[T](payload: payload, typeName: T.name)
   msg.queue.add(AbstractMessage(m))
 
-proc recv*[T](msg: var Msg, Ty: typedesc[T]): Option[Ty] =
+proc recv*[T](msg: var PluginMessages, Ty: typedesc[T]): Option[Ty] =
   for m in msg.queue:
     if m.typeName == Ty.name:
       return some(Message[Ty](m).payload)
 
-proc lateUpdate*(msg: var Msg) =
+proc lateUpdate*(msg: var PluginMessages) =
   msg.queue.setLen(0)
 
-proc handle*[T](msg: var Msg, Ty: typedesc[T]) =
+proc handle*[T](msg: var PluginMessages, Ty: typedesc[T]) =
   for m in msg.queue.mitems:
     if m.typeName == Ty.name:
       m.handled = true 
@@ -410,7 +410,7 @@ macro generatePluginStateInitialize*(pluginStates: var PluginStates): auto =
           `pluginStates`[`name`] = PluginState[typeof(`id`)](state: `id`)
     )
 
-macro generateListenStep*(): auto =
+macro generateListenStep*(messages: untyped): auto =
   var ifs = nnkStmtList.newTree()
   for (typ, fn) in PluginMessageTypes.pairs:
     var stmts = nnkStmtList.newTree()
@@ -433,12 +433,12 @@ macro generateListenStep*(): auto =
     ifs.add(
       quote do:
         block:
-          let maybeMessage = message.recv(`id`)
+          let maybeMessage = `messages`.recv(`id`)
           if maybeMessage.isSome():
             let msg {.inject.} = maybeMessage.get()
             `stmts`
     )
-  ifs.add(quote do: message.lateUpdate())
+  ifs.add(quote do: `messages`.lateUpdate())
   result = ifs
 
 when isMainModule:
@@ -454,6 +454,6 @@ when isMainModule:
     proc listen(running: bool) =
       discard
 
-  var message {.inject.} = Msg.init()
+  var message {.inject.} = PluginMessages.init()
   expandMacros:
     generateListenStep()

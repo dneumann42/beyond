@@ -1,7 +1,7 @@
-import sdl3
-import log, plugins
+import std/[macros]
+import sdl3, log, plugins, drawing
 
-export log
+export macros, log, drawing
 
 {.push raises: [].}
 
@@ -11,12 +11,32 @@ type
     window: SDL_Window
     renderer: SDL_Renderer
     pluginStates: PluginStates
+    messages: PluginMessages
+    drawing: Drawing
+    paused: bool
     state*: T
 
   AppConfig* = object
     appId*: string
     title*: string
     width*, height*: int
+
+macro withFields*(o: typed, self, blk: untyped) =
+  var bindings = nnkStmtList.newTree()
+  var rebindings = nnkStmtList.newTree()
+  let t = o.getTypeImpl()
+  for binding in t[2]:
+    let defs = binding[0]
+    let id = ident(defs.repr)
+    bindings.add quote do:
+      var `id` {.inject.} = `self`.state.`id`
+    rebindings.add quote do:
+      `self`.state.`id` = `id`
+  result = quote:
+    block:
+      `bindings`
+      `blk`
+      `rebindings`
 
 template generateApplication[T](cfg: AppConfig, initialState: T): auto =
   var gAppState {.global.}: ptr AppState[T]
@@ -42,15 +62,35 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
 
     info "SDL3 initialized successfully"
 
+    gAppState.drawing = Drawing.new(renderer)
+
     generatePluginStateInitialize(gAppState.pluginStates)
+
+    # Load plugins
+    withFields(gAppState.state, gAppState):
+      generatePluginStep(load)
     
     return SDL_APP_CONTINUE
 
   proc SDL_AppIterate(appstate: pointer): SDL_AppResult {.cdecl, gcsafe.} =
     let state = cast[ptr AppState[T]](appstate)
 
+    # Update
+    withFields(state.state, state):
+      generatePluginStep(loadScene)
+      generateListenStep(state.messages)
+      if not state.paused:
+        generatePluginStep(update)
+      generatePluginStep(alwaysUpdate)
+
+    # Render
     discard SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, 255)
     discard SDL_RenderClear(state.renderer)
+    
+    var drawing {.inject.} = state.drawing
+    withFields(state.state, state):
+      generatePluginStep(draw)
+    
     discard SDL_RenderPresent(state.renderer)
 
     return SDL_APP_CONTINUE

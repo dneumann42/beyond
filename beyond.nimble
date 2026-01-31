@@ -10,3 +10,6 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 2.2.6"
+
+requires "bumpy >= 1.1.3"
+requires "chroma >= 1.0.0"

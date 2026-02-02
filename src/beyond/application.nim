@@ -1,7 +1,8 @@
 import std/[macros]
-import sdl3, log, plugins, drawing
+import log, plugins, drawing, resources
+import sdl3, sdl3_image, sdl3_ttf
 
-export macros, log, drawing
+export macros, log, drawing, resources
 
 {.push raises: [].}
 
@@ -13,6 +14,7 @@ type
     pluginStates: PluginStates
     messages: PluginMessages
     drawing: Drawing
+    resources: Resources
     paused: bool
     state*: T
 
@@ -60,13 +62,21 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
     gAppState.window = window
     gAppState.renderer = renderer
 
-    info "SDL3 initialized successfully"
+    if not TTF_Init():
+      info "Failed to initialize SDL3_ttf: ", SDL_GetError()
+      return SDL_APP_FAILURE
+      
+    info "SDL3 & SDL3_ttf initialized successfully"
 
+    gAppState.resources = Resources.new()
     gAppState.drawing = Drawing.new(renderer)
 
     generatePluginStateInitialize(gAppState.pluginStates)
 
-    # Load plugins
+    var 
+      drawing {.inject.} = gAppState.drawing
+      resources {.inject.} = gAppState.resources
+
     withFields(gAppState.state, gAppState):
       generatePluginStep(load)
     

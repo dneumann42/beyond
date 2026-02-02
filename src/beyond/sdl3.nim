@@ -1,32 +1,44 @@
 ## SDL3 Bindings
 
-# Check if caller wants static linking
-when defined(beyondStaticLinkSDL3):
-  import std/strutils
-
-  # Link against static SDL3 library
-  # Uses pkg-config to find SDL3 library path
-  const sdl3LibDir = staticExec("pkg-config --variable=libdir sdl3").strip()
-  const sdl3Cflags = staticExec("pkg-config --cflags sdl3").strip()
-
-  # Link directly to the static library file
-  {.passL: sdl3LibDir & "/libSDL3.a".}
-  {.passL: "-pthread -lm -ldl".}
-  {.passC: sdl3Cflags.}
-  {.passC: "-DSDL_STATIC_LIB".}
-else:
-  {.passL: "-lSDL3".}
+{.passL: "-lSDL3".}
 
 type
   SDL_Window* = ptr object
   SDL_Renderer* = ptr object
+  SDL_SurfaceFlags* = distinct uint32
+  SDL_PixelFormat* = distinct uint32
+  
+  SDL_Surface* = ptr object
+    flags*: SDL_SurfaceFlags
+    format*: SDL_PixelFormat
+    w*: cint
+    h*: cint
+    pitch*: cint
+    pixels*: pointer
+    userdata*: pointer
+    locked*: cint
+    list_blitmap*: pointer # private
+    clip_rect*: SDL_Rect
+    map*: pointer           # private, SDL_BlitMap
+    refcount*: cint
+        
+  SDL_Texture* = ptr object
+      
   SDL_WindowFlags* = distinct uint32
-
   SDL_FRect* = object
     x*: cfloat
     y*: cfloat
     w*: cfloat
     h*: cfloat
+
+  SDL_Rect* = object
+    x*: cint
+    y*: cint
+    w*: cint
+    h*: cint
+
+  SDL_Color* {.bycopy.} = object
+    r*, g*, b*, a*: uint8
 
   SDL_AppResult* = enum
     SDL_APP_CONTINUE = 0
@@ -77,6 +89,8 @@ proc SDL_CreateWindow*(title: cstring, w: cint, h: cint, flags: SDL_WindowFlags)
 proc SDL_DestroyWindow*(window: SDL_Window) {.importc, cdecl.}
 proc SDL_CreateRenderer*(window: SDL_Window, name: cstring): SDL_Renderer {.importc, cdecl.}
 proc SDL_DestroyRenderer*(renderer: SDL_Renderer) {.importc, cdecl.}
+proc SDL_DestroySurface*(surface: SDL_Surface) {.importc, cdecl.}
+proc SDL_DestroyTexture*(texture: SDL_Texture) {.importc, cdecl.}
 
 # Render - Drawing Functions
 proc SDL_SetRenderDrawColor*(renderer: SDL_Renderer, r: uint8, g: uint8, b: uint8, a: uint8): cint {.importc, cdecl.}
@@ -88,11 +102,19 @@ proc SDL_RenderRect*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.import
 proc SDL_RenderLine*(renderer: SDL_Renderer, x1: cfloat, y1: cfloat, x2: cfloat, y2: cfloat): cint {.importc, cdecl.}
 proc SDL_RenderPoint*(renderer: SDL_Renderer, x: cfloat, y: cfloat): cint {.importc, cdecl.}
 
+proc SDL_RenderTexture*(
+  renderer: SDL_Renderer, 
+  texture: SDL_Texture, 
+  srcrect, dstrect: ptr SDL_FRect
+) {.importc, cdecl.}
+
 # Render - Viewport and Scaling
 proc SDL_SetRenderScale*(renderer: SDL_Renderer, scaleX: cfloat, scaleY: cfloat): cint {.importc, cdecl.}
 proc SDL_GetRenderScale*(renderer: SDL_Renderer, scaleX: ptr cfloat, scaleY: ptr cfloat): cint {.importc, cdecl.}
 proc SDL_SetRenderViewport*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.importc, cdecl.}
 proc SDL_GetRenderViewport*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.importc, cdecl.}
+
+proc SDL_RenderDebugText*(renderer: SDL_Renderer, x: cfloat, y: cfloat, text: cstring): cint {.importc, cdecl.}
 
 proc SDL_GetError*(): cstring {.importc, cdecl.}
 proc SDL_PollEvent*(event: ptr SDL_Event): bool {.importc, cdecl.}

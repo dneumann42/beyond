@@ -1,8 +1,11 @@
-import std/[macros]
-import log, plugins, drawing, resources
+import std/[macros, sets]
+import log, plugins, drawing, resources, inputs
 import sdl3, sdl3_image, sdl3_ttf
 
 export macros, log, drawing, resources
+
+export sdl3.`==`
+export sdl3.hash
 
 {.push raises: [].}
 
@@ -15,6 +18,7 @@ type
     messages: PluginMessages
     drawing: Drawing
     resources: Resources
+    input: Input
     paused: bool
     state*: T
 
@@ -76,22 +80,30 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
     var 
       drawing {.inject.} = gAppState.drawing
       resources {.inject.} = gAppState.resources
+      input {.inject.} = gAppState.input
 
     withFields(gAppState.state, gAppState):
       generatePluginStep(load)
-    
+
+    gAppState.input = input
     return SDL_APP_CONTINUE
 
   proc SDL_AppIterate(appstate: pointer): SDL_AppResult {.cdecl, gcsafe.} =
-    let state = cast[ptr AppState[T]](appstate)
+    var state = cast[ptr AppState[T]](appstate)
 
-    # Update
+    var 
+      input {.inject.} = state.input
+      quit {.inject.} = false
+
     withFields(state.state, state):
       generatePluginStep(loadScene)
       generateListenStep(state.messages)
       if not state.paused:
         generatePluginStep(update)
       generatePluginStep(alwaysUpdate)
+
+    if quit:
+      return SDL_APP_SUCCESS
 
     # Render
     discard SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, 255)
@@ -102,16 +114,25 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
       generatePluginStep(draw)
     
     discard SDL_RenderPresent(state.renderer)
+    state.input.pressedKey.clear()
+    state.input.releasedKey.clear()
 
     return SDL_APP_CONTINUE
 
   proc SDL_AppEvent(appstate: pointer, event: ptr SDL_Event): SDL_AppResult {.cdecl, gcsafe.} =
+    let state = cast[ptr AppState[T]](appstate)
+    
     case event.kind
     of SDL_EVENT_QUIT:
       return SDL_APP_SUCCESS
     of SDL_EVENT_KEY_DOWN:
-      if event.key.key == SDLK_ESCAPE:
-        return SDL_APP_SUCCESS
+      let wasDown = state.input.downKey.contains(event.key.key)
+      state.input.downKey.incl(event.key.key)
+      if not wasDown:
+        state.input.pressedKey.incl(event.key.key)
+    of SDL_EVENT_KEY_UP:
+      if state.input.downKey.contains(event.key.key):
+        state.input.downKey.excl(event.key.key)
     else:
       discard
 

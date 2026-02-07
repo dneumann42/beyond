@@ -8,8 +8,74 @@ type
   SDL_Window* = ptr object
   SDL_Renderer* = ptr object
   SDL_SurfaceFlags* = distinct uint32
-  SDL_PixelFormat* = distinct uint32
-  
+
+  SDL_PixelFormat* {.size: sizeof(uint32).} = enum
+    SDL_PIXELFORMAT_UNKNOWN = 0
+    SDL_PIXELFORMAT_INDEX1LSB = 0x11100100u
+    SDL_PIXELFORMAT_INDEX1MSB = 0x11200100u
+    SDL_PIXELFORMAT_INDEX2LSB = 0x1c100200u
+    SDL_PIXELFORMAT_INDEX2MSB = 0x1c200200u
+    SDL_PIXELFORMAT_INDEX4LSB = 0x12100400u
+    SDL_PIXELFORMAT_INDEX4MSB = 0x12200400u
+    SDL_PIXELFORMAT_INDEX8 = 0x13000801u
+    SDL_PIXELFORMAT_RGB332 = 0x14110801u
+    SDL_PIXELFORMAT_XRGB4444 = 0x15120c02u
+    SDL_PIXELFORMAT_XBGR4444 = 0x15520c02u
+    SDL_PIXELFORMAT_XRGB1555 = 0x15130f02u
+    SDL_PIXELFORMAT_XBGR1555 = 0x15530f02u
+    SDL_PIXELFORMAT_ARGB4444 = 0x15321002u
+    SDL_PIXELFORMAT_RGBA4444 = 0x15421002u
+    SDL_PIXELFORMAT_ABGR4444 = 0x15721002u
+    SDL_PIXELFORMAT_BGRA4444 = 0x15821002u
+    SDL_PIXELFORMAT_ARGB1555 = 0x15331002u
+    SDL_PIXELFORMAT_RGBA5551 = 0x15441002u
+    SDL_PIXELFORMAT_ABGR1555 = 0x15731002u
+    SDL_PIXELFORMAT_BGRA5551 = 0x15841002u
+    SDL_PIXELFORMAT_RGB565 = 0x15151002u
+    SDL_PIXELFORMAT_BGR565 = 0x15551002u
+    SDL_PIXELFORMAT_RGB24 = 0x17101803u
+    SDL_PIXELFORMAT_BGR24 = 0x17401803u
+    SDL_PIXELFORMAT_XRGB8888 = 0x16161804u
+    SDL_PIXELFORMAT_RGBX8888 = 0x16261804u
+    SDL_PIXELFORMAT_XBGR8888 = 0x16561804u
+    SDL_PIXELFORMAT_BGRX8888 = 0x16661804u
+    SDL_PIXELFORMAT_ARGB8888 = 0x16362004u
+    SDL_PIXELFORMAT_RGBA8888 = 0x16462004u
+    SDL_PIXELFORMAT_ABGR8888 = 0x16762004u
+    SDL_PIXELFORMAT_BGRA8888 = 0x16862004u
+    SDL_PIXELFORMAT_XRGB2101010 = 0x16172004u
+    SDL_PIXELFORMAT_XBGR2101010 = 0x16572004u
+    SDL_PIXELFORMAT_ARGB2101010 = 0x16372004u
+    SDL_PIXELFORMAT_ABGR2101010 = 0x16772004u
+    SDL_PIXELFORMAT_RGB48 = 0x18103006u
+    SDL_PIXELFORMAT_BGR48 = 0x18403006u
+    SDL_PIXELFORMAT_RGBA64 = 0x18204008u
+    SDL_PIXELFORMAT_ARGB64 = 0x18304008u
+    SDL_PIXELFORMAT_BGRA64 = 0x18504008u
+    SDL_PIXELFORMAT_ABGR64 = 0x18604008u
+    SDL_PIXELFORMAT_RGB48_FLOAT = 0x1a103006u
+    SDL_PIXELFORMAT_BGR48_FLOAT = 0x1a403006u
+    SDL_PIXELFORMAT_RGBA64_FLOAT = 0x1a204008u
+    SDL_PIXELFORMAT_ARGB64_FLOAT = 0x1a304008u
+    SDL_PIXELFORMAT_BGRA64_FLOAT = 0x1a504008u
+    SDL_PIXELFORMAT_ABGR64_FLOAT = 0x1a604008u
+    SDL_PIXELFORMAT_RGB96_FLOAT = 0x1b10600cu
+    SDL_PIXELFORMAT_BGR96_FLOAT = 0x1b40600cu
+    SDL_PIXELFORMAT_RGBA128_FLOAT = 0x1b208010u
+    SDL_PIXELFORMAT_ARGB128_FLOAT = 0x1b308010u
+    SDL_PIXELFORMAT_BGRA128_FLOAT = 0x1b508010u
+    SDL_PIXELFORMAT_ABGR128_FLOAT = 0x1b608010u
+    SDL_PIXELFORMAT_YV12 = 0x32315659u
+    SDL_PIXELFORMAT_IYUV = 0x56555949u
+    SDL_PIXELFORMAT_YUY2 = 0x32595559u
+    SDL_PIXELFORMAT_UYVY = 0x59565955u
+    SDL_PIXELFORMAT_YVYU = 0x55595659u
+    SDL_PIXELFORMAT_NV12 = 0x3231564eu
+    SDL_PIXELFORMAT_NV21 = 0x3132564eu
+    SDL_PIXELFORMAT_P010 = 0x30313050u
+    SDL_PIXELFORMAT_EXTERNAL_OES = 0x2053454fu
+    SDL_PIXELFORMAT_MJPG = 0x47504a4du
+
   SDL_Surface* = ptr object
     flags*: SDL_SurfaceFlags
     format*: SDL_PixelFormat
@@ -25,7 +91,16 @@ type
     refcount*: cint
         
   SDL_Texture* = ptr object
-      
+
+  SDL_TextureAccess* = enum
+    SDL_TEXTUREACCESS_STATIC = 0    ## Changes rarely, not lockable
+    SDL_TEXTUREACCESS_STREAMING = 1 ## Changes frequently, lockable
+    SDL_TEXTUREACCESS_TARGET = 2    ## Can be used as a render target
+
+  SDL_ScaleMode* = enum
+    SDL_SCALEMODE_NEAREST = 0  ## Nearest pixel sampling (pixelated/sharp)
+    SDL_SCALEMODE_LINEAR = 1   ## Linear filtering (smooth/blurry)
+
   SDL_WindowFlags* = distinct uint32
   SDL_FRect* = object
     x*: cfloat
@@ -42,6 +117,15 @@ type
   SDL_Color* {.bycopy.} = object
     r*, g*, b*, a*: uint8
 
+  SDL_FPoint* = object
+    x*: cfloat
+    y*: cfloat
+
+  SDL_Vertex* = object
+    position*: SDL_FPoint
+    color*: SDL_Color
+    tex_coord*: SDL_FPoint
+
   SDL_AppResult* = enum
     SDL_APP_CONTINUE = 0
     SDL_APP_SUCCESS = 1
@@ -51,6 +135,11 @@ type
     SDL_EVENT_QUIT = 0x100
     SDL_EVENT_KEY_DOWN = 0x300
     SDL_EVENT_KEY_UP = 0x301
+    SDL_EVENT_TEXT_INPUT = 0x303
+    SDL_EVENT_MOUSE_MOTION = 0x400
+    SDL_EVENT_MOUSE_BUTTON_DOWN = 0x401
+    SDL_EVENT_MOUSE_BUTTON_UP = 0x402
+    SDL_EVENT_MOUSE_WHEEL = 0x403
     SDL_EVENT_GAMEPAD_AXIS_MOTION = 0x650
     SDL_EVENT_GAMEPAD_BUTTON_DOWN = 0x651
     SDL_EVENT_GAMEPAD_BUTTON_UP = 0x652
@@ -59,6 +148,7 @@ type
 
   SDL_Keycode* = distinct uint32
   SDL_GamepadButton* = distinct uint32
+  SDL_MouseButton* = distinct uint8
 
   SDL_KeyboardEvent* = object
     kind*: SDL_EventType
@@ -97,9 +187,53 @@ type
     timestamp*: uint64
     which*: uint32       # Gamepad instance ID
 
+  SDL_TextInputEvent* = object
+    kind*: SDL_EventType
+    timestamp*: uint64
+    windowID*: uint32
+    text*: array[32, char]
+
+  SDL_MouseMotionEvent* = object
+    kind*: SDL_EventType
+    timestamp*: uint64
+    windowID*: uint32
+    which*: uint32
+    state*: uint32
+    x*: float32
+    y*: float32
+    xrel*: float32
+    yrel*: float32
+
+  SDL_MouseButtonEvent* = object
+    kind*: SDL_EventType
+    timestamp*: uint64
+    windowID*: uint32
+    which*: uint32
+    button*: SDL_MouseButton
+    down*: bool
+    clicks*: uint8
+    padding*: uint8
+    x*: float32
+    y*: float32
+
+  SDL_MouseWheelEvent* = object
+    kind*: SDL_EventType
+    timestamp*: uint64
+    windowID*: uint32
+    which*: uint32
+    x*: float32
+    y*: float32
+    direction*: uint32
+    mouseX*: float32
+    mouseY*: float32
+
   SDL_Event* {.union.} = object
     kind*: SDL_EventType
     key*: SDL_KeyboardEvent
+    text*: SDL_TextInputEvent
+    motion*: SDL_MouseMotionEvent
+    button*: SDL_MouseButtonEvent
+    wheel*: SDL_MouseWheelEvent
     gbutton*: SDL_GamepadButtonEvent
     gaxis*: SDL_GamepadAxisEvent
     gdevice*: SDL_GamepadDeviceEvent
@@ -113,6 +247,29 @@ type
 const
   SDL_WINDOW_RESIZABLE* = 0x00000020'u32
 
+# Pixel format aliases for RGBA byte arrays (platform-dependent)
+when cpuEndian == littleEndian:
+  const
+    SDL_PIXELFORMAT_RGBA32* = SDL_PIXELFORMAT_ABGR8888
+    SDL_PIXELFORMAT_ARGB32* = SDL_PIXELFORMAT_BGRA8888
+    SDL_PIXELFORMAT_BGRA32* = SDL_PIXELFORMAT_ARGB8888
+    SDL_PIXELFORMAT_ABGR32* = SDL_PIXELFORMAT_RGBA8888
+    SDL_PIXELFORMAT_RGBX32* = SDL_PIXELFORMAT_XBGR8888
+    SDL_PIXELFORMAT_XRGB32* = SDL_PIXELFORMAT_BGRX8888
+    SDL_PIXELFORMAT_BGRX32* = SDL_PIXELFORMAT_XRGB8888
+    SDL_PIXELFORMAT_XBGR32* = SDL_PIXELFORMAT_RGBX8888
+else:
+  const
+    SDL_PIXELFORMAT_RGBA32* = SDL_PIXELFORMAT_RGBA8888
+    SDL_PIXELFORMAT_ARGB32* = SDL_PIXELFORMAT_ARGB8888
+    SDL_PIXELFORMAT_BGRA32* = SDL_PIXELFORMAT_BGRA8888
+    SDL_PIXELFORMAT_ABGR32* = SDL_PIXELFORMAT_ABGR8888
+    SDL_PIXELFORMAT_RGBX32* = SDL_PIXELFORMAT_RGBX8888
+    SDL_PIXELFORMAT_XRGB32* = SDL_PIXELFORMAT_XRGB8888
+    SDL_PIXELFORMAT_BGRX32* = SDL_PIXELFORMAT_BGRX8888
+    SDL_PIXELFORMAT_XBGR32* = SDL_PIXELFORMAT_XBGR8888
+
+const
   # Keycodes - Letters
   SDLK_A* = SDL_Keycode(0x00000061)
   SDLK_B* = SDL_Keycode(0x00000062)
@@ -208,6 +365,13 @@ const
   SDLK_PAGEUP* = SDL_Keycode(0x4000004B)
   SDLK_PAGEDOWN* = SDL_Keycode(0x4000004E)
 
+  # Mouse Buttons
+  SDL_BUTTON_LEFT* = SDL_MouseButton(1)
+  SDL_BUTTON_MIDDLE* = SDL_MouseButton(2)
+  SDL_BUTTON_RIGHT* = SDL_MouseButton(3)
+  SDL_BUTTON_X1* = SDL_MouseButton(4)
+  SDL_BUTTON_X2* = SDL_MouseButton(5)
+
   # Gamepad Buttons
   SDL_GAMEPAD_BUTTON_INVALID* = SDL_GamepadButton(0xFFFFFFFF'u32)
   SDL_GAMEPAD_BUTTON_SOUTH* = SDL_GamepadButton(0)      # A on Xbox, Cross on PlayStation
@@ -240,8 +404,10 @@ const
 
 proc `==`*(a, b: SDL_Keycode): bool {.borrow.}
 proc `==`*(a, b: SDL_GamepadButton): bool {.borrow.}
+proc `==`*(a, b: SDL_MouseButton): bool {.borrow.}
 proc hash*(s: SDL_Keycode): Hash = s.uint32.hash()
 proc hash*(s: SDL_GamepadButton): Hash = s.uint32.hash()
+proc hash*(s: SDL_MouseButton): Hash = s.uint8.hash()
 
 template sdlCall*(blk: untyped) =
   if not bool(blk):
@@ -255,6 +421,35 @@ proc SDL_DestroyRenderer*(renderer: SDL_Renderer) {.importc, cdecl.}
 proc SDL_DestroySurface*(surface: SDL_Surface) {.importc, cdecl.}
 proc SDL_DestroyTexture*(texture: SDL_Texture) {.importc, cdecl.}
 
+proc SDL_CreateTexture*(
+  renderer: SDL_Renderer,
+  format: SDL_PixelFormat,
+  access: SDL_TextureAccess,
+  w: cint,
+  h: cint
+): SDL_Texture {.importc, cdecl.}
+
+proc SDL_CreateTextureFromSurface*(
+  renderer: SDL_Renderer,
+  surface: SDL_Surface
+): SDL_Texture {.importc, cdecl.}
+
+proc SDL_SetRenderTarget*(
+  renderer: SDL_Renderer,
+  texture: SDL_Texture
+): bool {.importc, cdecl.}
+
+# Texture - Scale Mode
+proc SDL_SetTextureScaleMode*(
+  texture: SDL_Texture,
+  scaleMode: SDL_ScaleMode
+): cint {.importc, cdecl.}
+
+proc SDL_GetTextureScaleMode*(
+  texture: SDL_Texture,
+  scaleMode: ptr SDL_ScaleMode
+): cint {.importc, cdecl.}
+
 # Render - Drawing Functions
 proc SDL_SetRenderDrawColor*(renderer: SDL_Renderer, r: uint8, g: uint8, b: uint8, a: uint8): cint {.importc, cdecl.}
 proc SDL_SetRenderDrawColorFloat*(renderer: SDL_Renderer, r: cfloat, g: cfloat, b: cfloat, a: cfloat): cint {.importc, cdecl.}
@@ -265,6 +460,15 @@ proc SDL_RenderRect*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.import
 proc SDL_RenderLine*(renderer: SDL_Renderer, x1: cfloat, y1: cfloat, x2: cfloat, y2: cfloat): cint {.importc, cdecl.}
 proc SDL_RenderPoint*(renderer: SDL_Renderer, x: cfloat, y: cfloat): cint {.importc, cdecl.}
 
+proc SDL_RenderGeometry*(
+  renderer: SDL_Renderer,
+  texture: SDL_Texture,
+  vertices: ptr SDL_Vertex,
+  num_vertices: cint,
+  indices: ptr cint,
+  num_indices: cint
+): cint {.importc, cdecl.}
+
 proc SDL_RenderTexture*(
   renderer: SDL_Renderer, 
   texture: SDL_Texture, 
@@ -272,12 +476,18 @@ proc SDL_RenderTexture*(
 ) {.importc, cdecl.}
 
 # Render - Viewport and Scaling
+proc SDL_GetRenderOutputSize*(renderer: SDL_Renderer, w: ptr cint, h: ptr cint): cint {.importc, cdecl.}
 proc SDL_SetRenderScale*(renderer: SDL_Renderer, scaleX: cfloat, scaleY: cfloat): cint {.importc, cdecl.}
 proc SDL_GetRenderScale*(renderer: SDL_Renderer, scaleX: ptr cfloat, scaleY: ptr cfloat): cint {.importc, cdecl.}
 proc SDL_SetRenderViewport*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.importc, cdecl.}
 proc SDL_GetRenderViewport*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.importc, cdecl.}
 
 proc SDL_RenderDebugText*(renderer: SDL_Renderer, x: cfloat, y: cfloat, text: cstring): cint {.importc, cdecl.}
+
+# Surface operations
+proc SDL_CreateSurface*(width: cint, height: cint, format: SDL_PixelFormat): SDL_Surface {.importc, cdecl.}
+proc SDL_RenderReadPixels*(renderer: SDL_Renderer, rect: ptr SDL_FRect): SDL_Surface {.importc, cdecl.}
+proc SDL_SaveBMP*(surface: SDL_Surface, file: cstring): cint {.importc, cdecl.}
 
 proc SDL_GetError*(): cstring {.importc, cdecl.}
 proc SDL_PollEvent*(event: ptr SDL_Event): bool {.importc, cdecl.}

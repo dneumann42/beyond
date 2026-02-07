@@ -1,8 +1,9 @@
 import std/[macros, sets]
-import log, plugins, drawing, resources, inputs
+import log, plugins, drawing, inputs
+from resources import Resources
 import sdl3, sdl3_image, sdl3_ttf
 
-export macros, log, drawing, resources
+export macros, log, drawing, Resources
 
 export sdl3.`==`
 export sdl3.hash
@@ -18,6 +19,7 @@ type
     messages: PluginMessages
     drawing: Drawing
     resources: Resources
+    scenes: SceneStack
     input: Input
     paused: bool
     state*: T
@@ -72,28 +74,39 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
       
     info "SDL3 & SDL3_ttf initialized successfully"
 
-    gAppState.resources = Resources.new()
+    gAppState.resources = Resources.new(renderer)
     gAppState.drawing = Drawing.new(renderer)
+    gAppState.scenes = SceneStack.new()
 
     generatePluginStateInitialize(gAppState.pluginStates)
 
-    var 
+    var
       drawing {.inject.} = gAppState.drawing
       resources {.inject.} = gAppState.resources
       input {.inject.} = gAppState.input
+      scenes {.inject.} = gAppState.scenes
+      pluginStates {.inject.} = gAppState.pluginStates
 
     withFields(gAppState.state, gAppState):
       generatePluginStep(load)
 
     gAppState.input = input
+    gAppState.scenes = scenes
+    gAppState.pluginStates = pluginStates
     return SDL_APP_CONTINUE
 
   proc SDL_AppIterate(appstate: pointer): SDL_AppResult {.cdecl, gcsafe.} =
     var state = cast[ptr AppState[T]](appstate)
 
-    var 
+    var
       input {.inject.} = state.input
+      scenes {.inject.} = state.scenes
+      pluginStates {.inject.} = state.pluginStates
+      resources {.inject.} = state.resources
       quit {.inject.} = false
+
+    state.scenes.startFrame()
+    state.scenes.handlePushed()
 
     withFields(state.state, state):
       generatePluginStep(loadScene)
@@ -102,26 +115,46 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
         generatePluginStep(update)
       generatePluginStep(alwaysUpdate)
 
+    state.scenes = scenes
+    state.pluginStates = pluginStates
+
     if quit:
       return SDL_APP_SUCCESS
 
     # Render
     discard SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, 255)
     discard SDL_RenderClear(state.renderer)
-    
+
     var drawing {.inject.} = state.drawing
     withFields(state.state, state):
       generatePluginStep(draw)
-    
+
+    state.pluginStates = pluginStates
+
+    # Draw all canvases after scene drawing
+    state.drawing.drawCanvases()
+
     discard SDL_RenderPresent(state.renderer)
+
+    # Clear per-frame input state
     state.input.pressedKey.clear()
     state.input.releasedKey.clear()
+
+    # Clear per-frame UI input state
+    when compiles(state.state.ui):
+      state.state.ui.input.actionPressed = false
+      state.state.ui.input.dragPressed = false
+      state.state.ui.input.backspacePressed = false
+      state.state.ui.input.enterPressed = false
+      state.state.ui.input.tabPressed = false
+      state.state.ui.input.textInput = ""
+      state.state.ui.input.scrollY = 0.0
 
     return SDL_APP_CONTINUE
 
   proc SDL_AppEvent(appstate: pointer, event: ptr SDL_Event): SDL_AppResult {.cdecl, gcsafe.} =
     let state = cast[ptr AppState[T]](appstate)
-    
+
     case event.kind
     of SDL_EVENT_QUIT:
       return SDL_APP_SUCCESS
@@ -130,9 +163,43 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
       state.input.downKey.incl(event.key.key)
       if not wasDown:
         state.input.pressedKey.incl(event.key.key)
+
+      # Update UI input for special keys
+      when compiles(state.state.ui):
+        if event.key.key == SDLK_BACKSPACE:
+          state.state.ui.input.backspacePressed = true
+        elif event.key.key == SDLK_RETURN:
+          state.state.ui.input.enterPressed = true
+        elif event.key.key == SDLK_TAB:
+          state.state.ui.input.tabPressed = true
     of SDL_EVENT_KEY_UP:
       if state.input.downKey.contains(event.key.key):
         state.input.downKey.excl(event.key.key)
+    of SDL_EVENT_TEXT_INPUT:
+      # Accumulate text input for UI
+      when compiles(state.state.ui):
+        let text = $cast[cstring](addr event.text.text[0])
+        state.state.ui.input.textInput &= text
+    of SDL_EVENT_MOUSE_MOTION:
+      when compiles(state.state.ui):
+        state.state.ui.input.mousePosition = (event.motion.x.int, event.motion.y.int)
+    of SDL_EVENT_MOUSE_BUTTON_DOWN:
+      when compiles(state.state.ui):
+        if event.button.button == SDL_BUTTON_LEFT:
+          state.state.ui.input.actionDown = true
+          state.state.ui.input.actionPressed = true
+        elif event.button.button == SDL_BUTTON_RIGHT:
+          state.state.ui.input.dragDown = true
+          state.state.ui.input.dragPressed = true
+    of SDL_EVENT_MOUSE_BUTTON_UP:
+      when compiles(state.state.ui):
+        if event.button.button == SDL_BUTTON_LEFT:
+          state.state.ui.input.actionDown = false
+        elif event.button.button == SDL_BUTTON_RIGHT:
+          state.state.ui.input.dragDown = false
+    of SDL_EVENT_MOUSE_WHEEL:
+      when compiles(state.state.ui):
+        state.state.ui.input.scrollY = event.wheel.y.float * 20.0
     else:
       discard
 

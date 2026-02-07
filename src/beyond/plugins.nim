@@ -341,42 +341,42 @@ proc generatePluginStepKF(k: string, fn, kind: NimNode): auto =
     if PluginLocalStates.contains(pluginName):
       let T = PluginLocalStateTypes[pluginName]
       return quote:
-        if sceneStack.currentScene() == `pluginName`:
+        if scenes.currentScene() == `pluginName`:
           var state {.inject.}: `T` =
-            PluginState[`T`](app.pluginStates[`pluginName`]).state
+            PluginState[`T`](pluginStates[`pluginName`]).state
           `callName`(`args`)
-          app.pluginStates[`pluginName`] =
+          pluginStates[`pluginName`] =
             PluginState[`T`](state: state).AbstractPluginState
     else:
       return quote:
-        if sceneStack.currentScene() == `pluginName`:
+        if scenes.currentScene() == `pluginName`:
           `callName`(`args`)
   if PluginScenes.contains(k) and kind.repr == "loadScene":
     if PluginLocalStates.contains(pluginName):
       let T = PluginLocalStateTypes[pluginName]
       return quote:
-        if sceneStack.currentScene() == `pluginName` and
-            sceneStack.shouldLoad(sceneStack.currentScene()):
-          sceneStack.handleLoad()
+        if scenes.currentScene() == `pluginName` and
+            scenes.shouldLoad(scenes.currentScene()):
+          scenes.handleLoad()
           var state {.inject.}: `T` =
-            PluginState[`T`](app.pluginStates[`pluginName`]).state
+            PluginState[`T`](pluginStates[`pluginName`]).state
           `callName`(`args`)
-          app.pluginStates[`pluginName`] =
+          pluginStates[`pluginName`] =
             PluginState[`T`](state: state).AbstractPluginState
     else:
       return quote:
-        if sceneStack.currentScene() == `pluginName` and
-            sceneStack.shouldLoad(sceneStack.currentScene()):
-          sceneStack.handleLoad()
+        if scenes.currentScene() == `pluginName` and
+            scenes.shouldLoad(scenes.currentScene()):
+          scenes.handleLoad()
           `callName`(`args`)
   if PluginLocalStates.contains(pluginName):
     let T = PluginLocalStateTypes[pluginName]
     quote:
       block:
         var state {.inject.}: `T` =
-          PluginState[`T`](app.pluginStates[`pluginName`]).state
+          PluginState[`T`](pluginStates[`pluginName`]).state
         `callName`(`args`)
-        app.pluginStates[`pluginName`] =
+        pluginStates[`pluginName`] =
           PluginState[`T`](state: state).AbstractPluginState
   else:
     quote:

@@ -108,14 +108,21 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
   proc SDL_AppIterate(appstate: pointer): SDL_AppResult {.cdecl, gcsafe.} =
     var state = cast[ptr AppState[T]](appstate)
 
-    # Calculate performance metrics
-    let currentTime = SDL_GetPerformanceCounter()
+    # Target 60 FPS (16.67ms per frame)
+    const targetFrameTime = 1.0 / 60.0
     let frequency = SDL_GetPerformanceFrequency()
-    let deltaCounter = currentTime - state.lastFrameTime
-    state.lastFrameTime = currentTime
+
+    # Calculate delta time from last frame (includes previous frame's sleep)
+    let frameStartTime = SDL_GetPerformanceCounter()
+    let deltaCounter = frameStartTime - state.lastFrameTime
+    state.lastFrameTime = frameStartTime  # Update immediately for next frame
 
     # Calculate delta time in seconds
     state.deltaTime = deltaCounter.float / frequency.float
+
+    # Clamp delta time to prevent spiral of death
+    if state.deltaTime > 0.1:  # Max 100ms
+      state.deltaTime = 0.1
 
     # Calculate FPS (smooth with exponential moving average)
     if state.deltaTime > 0.0:
@@ -176,6 +183,17 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
       state.state.ui.input.tabPressed = false
       state.state.ui.input.textInput = ""
       state.state.ui.input.scrollY = 0.0
+
+    # Frame rate limiting - cap at 60 FPS for smooth, consistent gameplay
+    let frameEndTime = SDL_GetPerformanceCounter()
+    let frameElapsed = (frameEndTime - frameStartTime).float / frequency.float
+    let frameRemaining = targetFrameTime - frameElapsed
+
+    if frameRemaining > 0.0:
+      # Sleep for remaining time (convert to milliseconds)
+      let sleepMs = (frameRemaining * 1000.0).uint32
+      if sleepMs > 0:
+        SDL_Delay(sleepMs)
 
     return SDL_APP_CONTINUE
 

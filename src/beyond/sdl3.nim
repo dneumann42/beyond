@@ -432,6 +432,7 @@ proc SDL_SetAppMetadata*(appname: cstring, appversion: cstring, appidentifier: c
 # Performance timing functions
 proc SDL_GetPerformanceCounter*(): uint64 {.importc, cdecl.}
 proc SDL_GetPerformanceFrequency*(): uint64 {.importc, cdecl.}
+proc SDL_Delay*(ms: uint32) {.importc, cdecl.}
 
 proc SDL_CreateWindow*(title: cstring, w: cint, h: cint, flags: SDL_WindowFlags): SDL_Window {.importc, cdecl.}
 proc SDL_DestroyWindow*(window: SDL_Window) {.importc, cdecl.}

@@ -70,6 +70,10 @@ converter toSDLScaleMode*(mode: ScaleMode): SDL_ScaleMode =
 proc new*(T: typedesc[Drawing], renderer: SDL_Renderer): T =
   var w, h: cint
   discard SDL_GetRenderOutputSize(renderer, addr w, addr h)
+
+  # Enable alpha blending for transparency support
+  sdlCall SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND)
+
   result = T(
     renderer: renderer,
     currentCamera: "main",

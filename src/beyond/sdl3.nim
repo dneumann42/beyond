@@ -101,6 +101,15 @@ type
     SDL_SCALEMODE_NEAREST = 0  ## Nearest pixel sampling (pixelated/sharp)
     SDL_SCALEMODE_LINEAR = 1   ## Linear filtering (smooth/blurry)
 
+  SDL_BlendMode* {.size: sizeof(cint).} = enum
+    SDL_BLENDMODE_NONE = 0                 ## No blending
+    SDL_BLENDMODE_BLEND = 1                ## Alpha blending: dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))
+    SDL_BLENDMODE_BLEND_PREMULTIPLIED = 16 ## Premultiplied alpha blending
+    SDL_BLENDMODE_ADD = 2                  ## Additive blending: dstRGB = srcRGB + dstRGB
+    SDL_BLENDMODE_ADD_PREMULTIPLIED = 32   ## Premultiplied additive blending
+    SDL_BLENDMODE_MOD = 4                  ## Color modulate: dstRGB = srcRGB * dstRGB
+    SDL_BLENDMODE_MUL = 8                  ## Color multiply
+
   SDL_WindowFlags* = distinct uint32
   SDL_FRect* = object
     x*: cfloat
@@ -458,6 +467,7 @@ proc SDL_GetTextureScaleMode*(
 # Render - Drawing Functions
 proc SDL_SetRenderDrawColor*(renderer: SDL_Renderer, r: uint8, g: uint8, b: uint8, a: uint8): cint {.importc, cdecl.}
 proc SDL_SetRenderDrawColorFloat*(renderer: SDL_Renderer, r: cfloat, g: cfloat, b: cfloat, a: cfloat): cint {.importc, cdecl.}
+proc SDL_SetRenderDrawBlendMode*(renderer: SDL_Renderer, blendMode: SDL_BlendMode): cint {.importc, cdecl.}
 proc SDL_RenderClear*(renderer: SDL_Renderer): cint {.importc, cdecl.}
 proc SDL_RenderPresent*(renderer: SDL_Renderer): cint {.importc, cdecl.}
 proc SDL_RenderFillRect*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.importc: "SDL_RenderFillRect", cdecl.}

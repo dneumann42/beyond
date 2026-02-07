@@ -186,3 +186,28 @@ proc generateTilesheet*(renderer: SDL_Renderer, sourceDir: string, outputPath: s
 
   info "Tilesheet generated successfully with ", allDecomposedTiles.len, " tiles"
 
+proc createSpriteSheet*(dir: string, output: string) =
+  var
+    surfaces = newSeq[SDL_Surface]()
+    maxWidth = 0
+    height = 0
+
+  for (kind, path) in walkDir(dir):
+    if kind != pcFile or not path.endsWith(".png"):
+      continue
+    let surface = IMG_Load(path.cstring)
+    surfaces.add(surface)
+    maxWidth = max(maxWidth, surface.w.int)
+    height += surface.h.int
+  
+  let
+    textureWidth = nextPowerOf2(maxWidth)
+    textureHeight = nextPowerOf2(height)
+
+  var cursorY = 0
+  for surface in surfaces:
+    
+    cursorY += surface.h.int
+
+  echo "TEXTURES: ", textureWidth, " ", textureHeight
+

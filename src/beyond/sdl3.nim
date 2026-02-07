@@ -247,6 +247,11 @@ type
 const
   SDL_WINDOW_RESIZABLE* = 0x00000020'u32
 
+  # SDL Init flags
+  SDL_INIT_VIDEO* = 0x00000020'u32
+  SDL_INIT_AUDIO* = 0x00000010'u32
+  SDL_INIT_EVENTS* = 0x00004000'u32
+
 # Pixel format aliases for RGBA byte arrays (platform-dependent)
 when cpuEndian == littleEndian:
   const
@@ -488,7 +493,10 @@ proc SDL_RenderDebugText*(renderer: SDL_Renderer, x: cfloat, y: cfloat, text: cs
 proc SDL_CreateSurface*(width: cint, height: cint, format: SDL_PixelFormat): SDL_Surface {.importc, cdecl.}
 proc SDL_RenderReadPixels*(renderer: SDL_Renderer, rect: ptr SDL_FRect): SDL_Surface {.importc, cdecl.}
 proc SDL_SaveBMP*(surface: SDL_Surface, file: cstring): cint {.importc, cdecl.}
+proc SDL_FillSurfaceRect*(surface: SDL_Surface, rect: ptr SDL_Rect, color: uint32): cint {.importc, cdecl.}
 
+proc SDL_Init*(flags: uint32): cint {.importc, cdecl.}
+proc SDL_Quit*() {.importc, cdecl.}
 proc SDL_GetError*(): cstring {.importc, cdecl.}
 proc SDL_PollEvent*(event: ptr SDL_Event): bool {.importc, cdecl.}
 proc SDL_EnterAppMainCallbacks*(argc: cint, argv: cstringArray,

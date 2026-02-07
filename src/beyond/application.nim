@@ -24,6 +24,11 @@ type
     paused: bool
     state*: T
 
+    # Performance metrics
+    lastFrameTime: uint64
+    deltaTime*: float  ## Time since last frame in seconds
+    fps*: float        ## Current frames per second
+
   AppConfig* = object
     appId*: string
     title*: string
@@ -78,6 +83,11 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
     gAppState.drawing = Drawing.new(renderer)
     gAppState.scenes = SceneStack.new()
 
+    # Initialize performance counters
+    gAppState.lastFrameTime = SDL_GetPerformanceCounter()
+    gAppState.deltaTime = 0.0
+    gAppState.fps = 0.0
+
     generatePluginStateInitialize(gAppState.pluginStates)
 
     var
@@ -98,12 +108,29 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
   proc SDL_AppIterate(appstate: pointer): SDL_AppResult {.cdecl, gcsafe.} =
     var state = cast[ptr AppState[T]](appstate)
 
+    # Calculate performance metrics
+    let currentTime = SDL_GetPerformanceCounter()
+    let frequency = SDL_GetPerformanceFrequency()
+    let deltaCounter = currentTime - state.lastFrameTime
+    state.lastFrameTime = currentTime
+
+    # Calculate delta time in seconds
+    state.deltaTime = deltaCounter.float / frequency.float
+
+    # Calculate FPS (smooth with exponential moving average)
+    if state.deltaTime > 0.0:
+      let instantFPS = 1.0 / state.deltaTime
+      # Smooth FPS with 10% weight to new value
+      state.fps = state.fps * 0.9 + instantFPS * 0.1
+
     var
       input {.inject.} = state.input
       scenes {.inject.} = state.scenes
       pluginStates {.inject.} = state.pluginStates
       resources {.inject.} = state.resources
       quit {.inject.} = false
+      fps {.inject.} = state.fps
+      deltaTime {.inject.} = state.deltaTime
 
     state.scenes.startFrame()
     state.scenes.handlePushed()

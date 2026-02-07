@@ -33,6 +33,7 @@ type
     appId*: string
     title*: string
     width*, height*: int
+    renderWidth*, renderHeight*: int  ## Logical render resolution (defaults to width/height if 0)
 
 macro withFields*(o: typed, self, blk: untyped) =
   var bindings = nnkStmtList.newTree()
@@ -59,6 +60,9 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
 
     discard SDL_SetAppMetadata(gAppState.config.title.cstring, "1.0", gAppState.config.appId.cstring)
 
+    # Set nearest-neighbor filtering for pixel-perfect rendering
+    discard SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0")
+
     let window = SDL_CreateWindow(gAppState.config.title.cstring, gAppState.config.width.cint, gAppState.config.height.cint, SDL_WindowFlags(SDL_WINDOW_RESIZABLE))
     if window.isNil:
       info "Failed to create window: ", SDL_GetError()
@@ -72,6 +76,8 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
 
     gAppState.window = window
     gAppState.renderer = renderer
+
+    # No logical presentation - we're using manual letterboxing in drawCanvases
 
     if not TTF_Init():
       info "Failed to initialize SDL3_ttf: ", SDL_GetError()

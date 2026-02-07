@@ -44,12 +44,19 @@ type
     Nearest
     Linear
 
+  LetterboxMode* = enum
+    Stretch           ## Stretch canvas to fill window (may distort)
+    LetterboxWidth    ## Fit to window width, add bars top/bottom
+    LetterboxHeight   ## Fit to window height, add bars left/right
+    LetterboxAuto     ## Automatically choose based on aspect ratio
+
   Canvas* = object
     name*: string
     order*: int
     offset*: IVec2
     texture*: SDL_Texture
     backgroundColor*: Color
+    width*, height*: int  # Store canvas dimensions
 
   Drawing* = ref object
     currentFont*: TTF_Font
@@ -59,6 +66,8 @@ type
     canvases*: seq[Canvas]
     viewportWidth*, viewportHeight*: float
     offset*: Vec2  # Drawing offset (typically set by camera)
+    letterboxMode*: LetterboxMode  # How to fit canvases in window
+    renderScale*: float  # Scale factor for all rendering operations
 
 converter toSDLScaleMode*(mode: ScaleMode): SDL_ScaleMode =
   case mode:
@@ -80,10 +89,12 @@ proc new*(T: typedesc[Drawing], renderer: SDL_Renderer): T =
     cameras: @[Camera(name: "main", zoom: 1.0, smoothing: 0.1)],
     viewportWidth: w.float,
     viewportHeight: h.float,
-    offset: vec2(0, 0)
+    offset: vec2(0, 0),
+    letterboxMode: LetterboxAuto,  # Default to auto letterboxing
+    renderScale: 1.0  # Default to 1:1 rendering
   )
 
-proc addCanvas*(self: Drawing, name: string, width, height: int, order = 0, scaleMode = Linear, backgroundColor: Color = chroma.color(0, 0, 0, 0)) =
+proc addCanvas*(self: Drawing, name: string, width, height: int, order = 0, scaleMode = Nearest, backgroundColor: Color = chroma.color(0, 0, 0, 0)) =
   ## Create a new canvas (render target texture)
   ## First canvas defaults to black background, others default to transparent
   var texture = SDL_CreateTexture(
@@ -110,7 +121,9 @@ proc addCanvas*(self: Drawing, name: string, width, height: int, order = 0, scal
     name: name,
     texture: texture,
     order: order,
-    backgroundColor: bgColor
+    backgroundColor: bgColor,
+    width: width,
+    height: height
   )
 
 template beginCanvas*(self: Drawing, pname: string) =
@@ -353,11 +366,12 @@ proc rotatePoint(x, y, cx, cy, angle: float32): (float32, float32) {.inline.} =
 proc draw*(self: Drawing, rect: Rect, fill = true, color = White, borderRadius = 0.0'f32, rotation = 0.0'f32) =
   # TODO: SDL_RenderGeometry is not working correctly, disable for now
   # Always use simple rect rendering
+  # Apply render scale to position and size
   var frect = SDL_FRect(
-    x: rect.x - self.offset.x,
-    y: rect.y - self.offset.y,
-    w: rect.w,
-    h: rect.h
+    x: (rect.x - self.offset.x) * self.renderScale,
+    y: (rect.y - self.offset.y) * self.renderScale,
+    w: rect.w * self.renderScale,
+    h: rect.h * self.renderScale
   )
   self.setDrawColor color
   if fill:
@@ -367,8 +381,8 @@ proc draw*(self: Drawing, rect: Rect, fill = true, color = White, borderRadius =
 
 proc drawText*(self: Drawing, x, y: float, text: string, color = White) =
   self.drawColor = color
-  let screenX = x - self.offset.x
-  let screenY = y - self.offset.y
+  let screenX = (x - self.offset.x) * self.renderScale
+  let screenY = (y - self.offset.y) * self.renderScale
 
   if self.currentFont.isNil:
     sdlCall SDL_RenderDebugText(self.renderer, screenX.cfloat, screenY.cfloat, text.cstring)
@@ -388,11 +402,11 @@ proc drawText*(self: Drawing, x, y: float, text: string, color = White) =
     var dstrect = SDL_FRect(
       x: screenX,
       y: screenY,
-      w: surface.w.float32,
-      h: surface.h.float32,
+      w: surface.w.float32 * self.renderScale,
+      h: surface.h.float32 * self.renderScale,
     )
     SDL_DestroySurface(surface)
-    SDL_RenderTexture(
+    discard SDL_RenderTexture(
       self.renderer,
       texture,
       addr srcrect,
@@ -417,15 +431,15 @@ proc draw*(self: Drawing, texture: SDL_Texture,
   ## Draw a portion of a texture to the screen
   ## srcX, srcY, srcW, srcH: source rectangle in the texture
   ## dstX, dstY, dstW, dstH: destination rectangle in world coordinates
-  ## The drawing offset is automatically applied
+  ## The drawing offset and render scale are automatically applied
   var srcrect = SDL_FRect(x: srcX, y: srcY, w: srcW, h: srcH)
   var dstrect = SDL_FRect(
-    x: dstX - self.offset.x,
-    y: dstY - self.offset.y,
-    w: dstW,
-    h: dstH
+    x: (dstX - self.offset.x) * self.renderScale,
+    y: (dstY - self.offset.y) * self.renderScale,
+    w: dstW * self.renderScale,
+    h: dstH * self.renderScale
   )
-  SDL_RenderTexture(
+  discard SDL_RenderTexture(
     self.renderer,
     texture,
     addr srcrect,
@@ -448,29 +462,104 @@ proc sortCanvases*(self: Drawing) =
   ## Sort canvases by their order field
   self.canvases.sort(proc(a, b: Canvas): int = cmp(a.order, b.order))
 
+proc setLetterboxMode*(self: Drawing, mode: LetterboxMode) =
+  ## Set how canvases should be fit into the window
+  self.letterboxMode = mode
+
+proc setRenderScale*(self: Drawing, scale: float) =
+  ## Set the render scale for all drawing operations
+  ## For example, scale=4 means rendering at 4x resolution
+  self.renderScale = scale
+
+proc setTextureFiltering*(texture: SDL_Texture, filtering: ScaleMode) =
+  ## Set the filtering mode for a specific texture
+  ## Nearest = sharp/pixelated, Linear = smooth/blended
+  sdlCall SDL_SetTextureScaleMode(texture, filtering)
+
+proc setAllCanvasFiltering*(self: Drawing, filtering: ScaleMode) =
+  ## Set the filtering mode for all canvases
+  for canvas in self.canvases:
+    if not canvas.texture.isNil:
+      sdlCall SDL_SetTextureScaleMode(canvas.texture, filtering)
+
 proc drawCanvases*(self: Drawing) =
-  ## Draw all canvases to the screen in order
+  ## Draw all canvases to the screen in order with letterboxing
   # Sort canvases by order before drawing
   self.sortCanvases()
+
+  # Get window size
+  var windowW, windowH: cint
+  discard SDL_GetRenderOutputSize(self.renderer, addr windowW, addr windowH)
+
+  # Safety check: if window size is invalid, skip drawing
+  if windowW <= 0 or windowH <= 0:
+    return
 
   for canvas in self.canvases:
     if canvas.texture.isNil:
       continue
 
-    # Get texture size
-    var w, h: cint
-    discard SDL_GetRenderOutputSize(self.renderer, addr w, addr h)
+    # Use stored canvas dimensions
+    let canvasW = canvas.width
+    let canvasH = canvas.height
 
-    # Draw the entire canvas texture to the screen with offset
-    var dstrect = SDL_FRect(
-      x: canvas.offset.x.float32,
-      y: canvas.offset.y.float32,
-      w: w.float32,
-      h: h.float32
+    # Safety check: if canvas size is invalid, skip
+    if canvasW <= 0 or canvasH <= 0:
+      continue
+
+    # Calculate destination rectangle based on letterbox mode
+    let canvasAspect = canvasW.float / canvasH.float
+    let windowAspect = windowW.float / windowH.float
+
+    var dstX, dstY, dstW, dstH: float
+
+    case self.letterboxMode:
+    of Stretch:
+      # Stretch to fill entire window
+      dstX = 0.0
+      dstY = 0.0
+      dstW = windowW.float
+      dstH = windowH.float
+
+    of LetterboxWidth:
+      # Fit to window width, add bars on top/bottom
+      dstW = windowW.float
+      dstH = dstW / canvasAspect
+      dstX = 0.0
+      dstY = (windowH.float - dstH) / 2.0
+
+    of LetterboxHeight:
+      # Fit to window height, add bars on left/right
+      dstH = windowH.float
+      dstW = dstH * canvasAspect
+      dstX = (windowW.float - dstW) / 2.0
+      dstY = 0.0
+
+    of LetterboxAuto:
+      # Automatically choose based on aspect ratio
+      if canvasAspect > windowAspect:
+        # Canvas is wider than window - fit to width
+        dstW = windowW.float
+        dstH = dstW / canvasAspect
+        dstX = 0.0
+        dstY = (windowH.float - dstH) / 2.0
+      else:
+        # Canvas is taller than window - fit to height
+        dstH = windowH.float
+        dstW = dstH * canvasAspect
+        dstX = (windowW.float - dstW) / 2.0
+        dstY = 0.0
+
+    var dst = SDL_FRect(
+      x: dstX.float32,
+      y: dstY.float32,
+      w: dstW.float32,
+      h: dstH.float32
     )
-    SDL_RenderTexture(
+
+    discard SDL_RenderTexture(
       self.renderer,
       canvas.texture,
-      nil,  # Source rect (nil = entire texture)
-      addr dstrect
+      nil,  # Source rect (entire canvas)
+      addr dst  # Destination rect (with letterboxing)
     )

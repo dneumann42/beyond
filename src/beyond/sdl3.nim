@@ -470,6 +470,12 @@ proc SDL_GetTextureScaleMode*(
   scaleMode: ptr SDL_ScaleMode
 ): cint {.importc, cdecl.}
 
+proc SDL_GetTextureSize*(
+  texture: SDL_Texture,
+  w: ptr cint,
+  h: ptr cint
+): cint {.importc, cdecl.}
+
 # Render - Drawing Functions
 proc SDL_SetRenderDrawColor*(renderer: SDL_Renderer, r: uint8, g: uint8, b: uint8, a: uint8): cint {.importc, cdecl.}
 proc SDL_SetRenderDrawColorFloat*(renderer: SDL_Renderer, r: cfloat, g: cfloat, b: cfloat, a: cfloat): cint {.importc, cdecl.}
@@ -491,10 +497,10 @@ proc SDL_RenderGeometry*(
 ): cint {.importc, cdecl.}
 
 proc SDL_RenderTexture*(
-  renderer: SDL_Renderer, 
-  texture: SDL_Texture, 
+  renderer: SDL_Renderer,
+  texture: SDL_Texture,
   srcrect, dstrect: ptr SDL_FRect
-) {.importc, cdecl.}
+): cint {.importc, cdecl.}
 
 # Render - Viewport and Scaling
 proc SDL_GetRenderOutputSize*(renderer: SDL_Renderer, w: ptr cint, h: ptr cint): cint {.importc, cdecl.}
@@ -502,6 +508,22 @@ proc SDL_SetRenderScale*(renderer: SDL_Renderer, scaleX: cfloat, scaleY: cfloat)
 proc SDL_GetRenderScale*(renderer: SDL_Renderer, scaleX: ptr cfloat, scaleY: ptr cfloat): cint {.importc, cdecl.}
 proc SDL_SetRenderViewport*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.importc, cdecl.}
 proc SDL_GetRenderViewport*(renderer: SDL_Renderer, rect: ptr SDL_FRect): cint {.importc, cdecl.}
+
+type
+  SDL_RendererLogicalPresentation* = enum
+    SDL_LOGICAL_PRESENTATION_DISABLED = 0
+    SDL_LOGICAL_PRESENTATION_STRETCH = 1
+    SDL_LOGICAL_PRESENTATION_LETTERBOX = 2
+    SDL_LOGICAL_PRESENTATION_OVERSCAN = 3
+    SDL_LOGICAL_PRESENTATION_INTEGER_SCALE = 4
+
+proc SDL_SetRenderLogicalPresentation*(
+  renderer: SDL_Renderer,
+  w: cint,
+  h: cint,
+  mode: SDL_RendererLogicalPresentation,
+  scaleMode: SDL_ScaleMode
+): cint {.importc, cdecl.}
 
 proc SDL_RenderDebugText*(renderer: SDL_Renderer, x: cfloat, y: cfloat, text: cstring): cint {.importc, cdecl.}
 
@@ -514,6 +536,13 @@ proc SDL_FillSurfaceRect*(surface: SDL_Surface, rect: ptr SDL_Rect, color: uint3
 proc SDL_Init*(flags: uint32): cint {.importc, cdecl.}
 proc SDL_Quit*() {.importc, cdecl.}
 proc SDL_GetError*(): cstring {.importc, cdecl.}
+
+# Hints for renderer configuration
+proc SDL_SetHint*(name: cstring, value: cstring): bool {.importc, cdecl.}
+proc SDL_GetHint*(name: cstring): cstring {.importc, cdecl.}
+
+const
+  SDL_HINT_RENDER_SCALE_QUALITY* = "SDL_RENDER_SCALE_QUALITY"
 proc SDL_PollEvent*(event: ptr SDL_Event): bool {.importc, cdecl.}
 proc SDL_EnterAppMainCallbacks*(argc: cint, argv: cstringArray,
                                 appinit_func: SDL_AppInit_func,

@@ -58,6 +58,7 @@ type
     renderer*: SDL_Renderer
     canvases*: seq[Canvas]
     viewportWidth*, viewportHeight*: float
+    offset*: Vec2  # Drawing offset (typically set by camera)
 
 converter toSDLScaleMode*(mode: ScaleMode): SDL_ScaleMode =
   case mode:
@@ -74,7 +75,8 @@ proc new*(T: typedesc[Drawing], renderer: SDL_Renderer): T =
     currentCamera: "main",
     cameras: @[Camera(name: "main", zoom: 1.0, smoothing: 0.1)],
     viewportWidth: w.float,
-    viewportHeight: h.float
+    viewportHeight: h.float,
+    offset: vec2(0, 0)
   )
 
 proc addCanvas*(self: Drawing, name: string, width, height: int, order = 0, scaleMode = Linear, backgroundColor: Color = chroma.color(0, 0, 0, 0)) =
@@ -248,10 +250,13 @@ proc setCameraRotation*(self: Drawing, rotation: float) =
   if not cam.isNil:
     cam.rotation = rotation
 
+proc setOffset*(self: Drawing, offset: Vec2) =
+  ## Set the drawing offset (typically used for camera)
+  self.offset = offset
+
 proc applyCamera*(self: Drawing) =
-  ## Apply camera transformations to the renderer
+  ## Apply camera transformations to the renderer and set drawing offset
   ## Call this before drawing your scene
-  ## Note: For position, use getCameraOffset() and manually transform coordinates
   let cam = self.getCamera()
   if cam.isNil:
     return
@@ -259,10 +264,14 @@ proc applyCamera*(self: Drawing) =
   # Apply zoom via render scale
   sdlCall SDL_SetRenderScale(self.renderer, cam.zoom, cam.zoom)
 
+  # Set offset from camera position
+  self.offset = cam.current
+
 proc resetCamera*(self: Drawing) =
-  ## Reset camera transformations
+  ## Reset camera transformations and offset
   ## Call this after drawing your scene (e.g., before drawing UI)
   sdlCall SDL_SetRenderScale(self.renderer, 1.0, 1.0)
+  self.offset = vec2(0, 0)
 
 proc getCameraOffset*(self: Drawing): Vec2 =
   ## Get the current camera offset for manual coordinate transformation
@@ -341,8 +350,8 @@ proc draw*(self: Drawing, rect: Rect, fill = true, color = White, borderRadius =
   # TODO: SDL_RenderGeometry is not working correctly, disable for now
   # Always use simple rect rendering
   var frect = SDL_FRect(
-    x: rect.x,
-    y: rect.y,
+    x: rect.x - self.offset.x,
+    y: rect.y - self.offset.y,
     w: rect.w,
     h: rect.h
   )
@@ -354,8 +363,11 @@ proc draw*(self: Drawing, rect: Rect, fill = true, color = White, borderRadius =
 
 proc drawText*(self: Drawing, x, y: float, text: string, color = White) =
   self.drawColor = color
+  let screenX = x - self.offset.x
+  let screenY = y - self.offset.y
+
   if self.currentFont.isNil:
-    sdlCall SDL_RenderDebugText(self.renderer, x.cfloat, y.cfloat, text.cstring)
+    sdlCall SDL_RenderDebugText(self.renderer, screenX.cfloat, screenY.cfloat, text.cstring)
   else:
     var surface = TTF_RenderText_Blended(self.currentFont, text, 0, color)
     if surface.isNil:
@@ -370,8 +382,8 @@ proc drawText*(self: Drawing, x, y: float, text: string, color = White) =
       h: surface.h.float32,
     )
     var dstrect = SDL_FRect(
-      x: x,
-      y: y,
+      x: screenX,
+      y: screenY,
       w: surface.w.float32,
       h: surface.h.float32,
     )
@@ -400,9 +412,15 @@ proc draw*(self: Drawing, texture: SDL_Texture,
                   dstX, dstY, dstW, dstH: float32) =
   ## Draw a portion of a texture to the screen
   ## srcX, srcY, srcW, srcH: source rectangle in the texture
-  ## dstX, dstY, dstW, dstH: destination rectangle on screen
+  ## dstX, dstY, dstW, dstH: destination rectangle in world coordinates
+  ## The drawing offset is automatically applied
   var srcrect = SDL_FRect(x: srcX, y: srcY, w: srcW, h: srcH)
-  var dstrect = SDL_FRect(x: dstX, y: dstY, w: dstW, h: dstH)
+  var dstrect = SDL_FRect(
+    x: dstX - self.offset.x,
+    y: dstY - self.offset.y,
+    w: dstW,
+    h: dstH
+  )
   SDL_RenderTexture(
     self.renderer,
     texture,

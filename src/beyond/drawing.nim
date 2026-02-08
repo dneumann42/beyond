@@ -446,6 +446,76 @@ proc draw*(self: Drawing, texture: SDL_Texture,
     addr dstrect
   )
 
+proc drawCircle*(self: Drawing, centerX, centerY, radius: float32, fill = false, color = White, segments = 32) =
+  ## Draw a circle using SDL3 line rendering
+  ## segments: number of line segments to approximate the circle (higher = smoother)
+
+  let scaledCenterX = (centerX - self.offset.x) * self.renderScale
+  let scaledCenterY = (centerY - self.offset.y) * self.renderScale
+  let scaledRadius = radius * self.renderScale
+
+  discard SDL_SetRenderDrawColor(
+    self.renderer,
+    uint8(color.r * 255),
+    uint8(color.g * 255),
+    uint8(color.b * 255),
+    uint8(color.a * 255)
+  )
+
+  if fill:
+    # Draw filled circle by drawing lines from center to perimeter
+    for i in 0..<segments:
+      let angle1 = (i.float32 / segments.float32) * 2.0 * PI
+      let angle2 = ((i + 1).float32 / segments.float32) * 2.0 * PI
+
+      let x1 = scaledCenterX + cos(angle1) * scaledRadius
+      let y1 = scaledCenterY + sin(angle1) * scaledRadius
+      let x2 = scaledCenterX + cos(angle2) * scaledRadius
+      let y2 = scaledCenterY + sin(angle2) * scaledRadius
+
+      # Draw triangle from center to two perimeter points
+      let sdlColor = SDL_Color(
+        r: uint8(color.r * 255),
+        g: uint8(color.g * 255),
+        b: uint8(color.b * 255),
+        a: uint8(color.a * 255)
+      )
+      var vertices = [
+        SDL_Vertex(position: SDL_FPoint(x: scaledCenterX, y: scaledCenterY), color: sdlColor),
+        SDL_Vertex(position: SDL_FPoint(x: x1, y: y1), color: sdlColor),
+        SDL_Vertex(position: SDL_FPoint(x: x2, y: y2), color: sdlColor)
+      ]
+      discard SDL_RenderGeometry(self.renderer, nil, addr vertices[0], 3, nil, 0)
+  else:
+    # Draw circle outline by connecting perimeter points
+    for i in 0..segments:
+      let angle1 = (i.float32 / segments.float32) * 2.0 * PI
+      let angle2 = ((i + 1).float32 / segments.float32) * 2.0 * PI
+
+      let x1 = scaledCenterX + cos(angle1) * scaledRadius
+      let y1 = scaledCenterY + sin(angle1) * scaledRadius
+      let x2 = scaledCenterX + cos(angle2) * scaledRadius
+      let y2 = scaledCenterY + sin(angle2) * scaledRadius
+
+      discard SDL_RenderLine(self.renderer, x1, y1, x2, y2)
+
+proc drawLine*(self: Drawing, x1, y1, x2, y2: float32, color = White) =
+  ## Draw a line from (x1, y1) to (x2, y2)
+  let scaledX1 = (x1 - self.offset.x) * self.renderScale
+  let scaledY1 = (y1 - self.offset.y) * self.renderScale
+  let scaledX2 = (x2 - self.offset.x) * self.renderScale
+  let scaledY2 = (y2 - self.offset.y) * self.renderScale
+
+  discard SDL_SetRenderDrawColor(
+    self.renderer,
+    uint8(color.r * 255),
+    uint8(color.g * 255),
+    uint8(color.b * 255),
+    uint8(color.a * 255)
+  )
+
+  discard SDL_RenderLine(self.renderer, scaledX1, scaledY1, scaledX2, scaledY2)
+
 proc saveScreenshot*(self: Drawing, filename: string) =
   ## Save the current renderer content to a BMP file
   let surface = SDL_RenderReadPixels(self.renderer, nil)

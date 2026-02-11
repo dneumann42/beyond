@@ -144,6 +144,7 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
       quit {.inject.} = false
       fps {.inject.} = state.fps
       deltaTime {.inject.} = state.deltaTime
+      paused {.inject.} = state.paused
 
     state.scenes.startFrame()
     state.scenes.handlePushed()
@@ -157,6 +158,7 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
 
     state.scenes = scenes
     state.pluginStates = pluginStates
+    state.paused = paused 
 
     if quit:
       return SDL_APP_SUCCESS

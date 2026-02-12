@@ -2,6 +2,8 @@
 
 A simple SDL3 application framework for Nim.
 
+> **⚠️ Development Status**: This library is under active development and the API may change.
+
 ## What is Beyond?
 
 Beyond is a game application framework built on SDL3. It provides a callback-based structure with a plugin system, scene management, and input handling. It handles the boilerplate of SDL3 initialization and main loop so you can focus on game logic.

@@ -11,6 +11,7 @@ Beyond is a game application framework built on SDL3. It provides a callback-bas
 - SDL3 callback-based architecture
 - Plugin system with lifecycle hooks
 - Scene stack for game states
+- Plugin-specific state management
 - Input abstraction
 - Resource management
 - Exception-safe logging
@@ -29,6 +30,14 @@ requires "beyond"
 ```nim
 import beyond/application
 
+type
+  GameState = object
+    score: int
+    playerName: string
+
+proc createGameState(): GameState =
+  GameState(score: 0, playerName: "Player")
+
 when isMainModule:
   let config = AppConfig(
     appId: "com.example.mygame",
@@ -39,23 +48,9 @@ when isMainModule:
   start(config)
 ```
 
-### Define Game State
-
-Your game state holds all runtime data:
-
-```nim
-type
-  GameState = object
-    score: int
-    playerName: string
-
-proc createGameState(): GameState =
-  GameState(score: 0, playerName: "Player")
-```
-
 ### Plugin System
 
-Plugins define game logic with lifecycle hooks:
+Plugins define game logic with lifecycle hooks. Plugin functions request parameters by name, and the framework provides them:
 
 ```nim
 import beyond/application
@@ -81,40 +76,109 @@ plugin GameLogic:
     if input.isPressed("escape"):
       quit = true
 
-  proc draw(drw: Drawing) =
+  proc draw(drawing: Drawing) =
     # Called during rendering
-    drw.drawText(10, 10, "Hello World")
+    drawing.drawText(10, 10, "Hello World")
 ```
 
 ### Plugin Hooks
 
-Available hooks and their injected parameters:
+Available lifecycle hooks:
 
 **load**
-- `resources: Resources` - Resource manager
-- `pluginStates: PluginStates` - Plugin state storage
+- Called once during SDL_AppInit
+- Use for initialization and resource loading
 
 **loadScene**
-- `scenes: SceneStack` - Scene stack
-- `pluginStates: PluginStates`
-- Custom game state fields
+- Called when the scene changes
+- Use for scene-specific setup
 
-**update** (skipped when paused)
-- `input: Input` - Input state
-- `scenes: var SceneStack` - Scene stack (mutable)
-- `pluginStates: PluginStates`
-- `resources: Resources`
-- `quit: var bool` - Set to true to quit
-- Custom game state fields
+**update**
+- Called every frame (skipped when paused)
+- Main game logic goes here
 
-**alwaysUpdate** (runs when paused)
-- Same as `update`
+**alwaysUpdate**
+- Called every frame (even when paused)
+- Use for UI, pause menus, etc.
 
 **draw**
-- `drawing: Drawing` - Rendering interface
-- Custom game state fields
+- Called during render phase
+- All drawing operations go here
 
-**Important**: Parameter names must match exactly as listed above.
+**drawHud**
+- Additional draw phase for HUD elements
+- Rendered after main draw
+
+### Available Parameters
+
+Plugin functions can request any of these parameters by name:
+
+**Framework-provided:**
+- `input: Input` - Input state (keyboard, mouse, scroll)
+- `scenes: var SceneStack` - Scene management
+- `resources: Resources` - Resource manager
+- `drawing: Drawing` - Drawing interface
+- `quit: var bool` - Set to true to quit application
+- `deltaTime: float` - Frame delta time
+- `fps: float` - Current frames per second
+- `paused: var bool` - Pause state
+
+**From GameState:**
+- Any field from your GameState object
+- Requested by field name (e.g., `score`, `entitySystem`, `ui`)
+
+**Plugin state:**
+- `state: var YourPluginState` - When plugin declares `state = YourPluginState()`
+
+### Plugin State
+
+Plugins can maintain their own state:
+
+```nim
+type
+  CounterState = object
+    count: int
+    lastUpdate: float
+
+plugin Counter:
+  state = CounterState()
+
+  proc update(state: var CounterState, deltaTime: float) =
+    state.count += 1
+    state.lastUpdate += deltaTime
+
+  proc draw(drawing: Drawing, state: CounterState) =
+    drawing.drawText(10, 10, "Count: " & $state.count)
+```
+
+### Accessing GameState Fields
+
+GameState fields are automatically available by requesting them as parameters:
+
+```nim
+type
+  GameState = object
+    score: int
+    lives: int
+    playerName: string
+
+proc createGameState(): GameState =
+  GameState(score: 0, lives: 3, playerName: "Player")
+
+plugin ScoreManager:
+  proc update(input: Input, score: var int, lives: var int) =
+    # score and lives come from GameState
+    if input.isPressed("collect"):
+      score += 10
+
+    if input.isPressed("damage"):
+      lives -= 1
+
+  proc draw(drawing: Drawing, score: int, lives: int, playerName: string) =
+    drawing.drawText(10, 10, "Score: " & $score)
+    drawing.drawText(10, 30, "Lives: " & $lives)
+    drawing.drawText(10, 50, "Player: " & playerName)
+```
 
 ### Scene Management
 
@@ -133,9 +197,9 @@ plugin SceneManager:
   proc loadScene(scenes: SceneStack) =
     case scenes.currentScene()
     of "MenuScene":
-      # Setup menu
+      echo "Menu loaded"
     of "GameScene":
-      # Setup game
+      echo "Game loaded"
     else:
       discard
 ```
@@ -144,6 +208,11 @@ plugin SceneManager:
 
 ```nim
 plugin InputHandler:
+  proc load(input: var Input) =
+    # Configure input mappings
+    input.set("jump").key(SDLK_SPACE)
+    input.set("fire").mouse(MouseButton.Left)
+
   proc update(input: Input) =
     # Check key presses
     if input.isPressed("jump"):
@@ -166,61 +235,38 @@ plugin InputHandler:
 ### Resource Management
 
 ```nim
-import beyond/resources
-
 plugin ResourceLoader:
-  proc load(resources: Resources) =
+  proc load(resources: Resources, drawing: var Drawing) =
     # Load resources
     resources.load(Texture, "player.png", "player")
-    resources.load(Sound, "jump.wav", "jump")
-    resources.load(Font, "arial.ttf", "main-font")
+    resources.load(Font, "arial.ttf", "main-font", 16)
 
-  proc draw(drw: Drawing, resources: Resources) =
+    # Set default font
+    drawing.font = resources.get(Font, "main-font")
+
+  proc draw(drawing: Drawing, resources: Resources) =
     # Use resources
     let texture = resources.get(Texture, "player")
-    drw.drawTexture(texture, 100, 100)
+    drawing.drawTexture(texture, 100, 100, 64, 64)
 ```
 
 ### Drawing
 
 ```nim
 plugin Renderer:
-  proc draw(drw: Drawing) =
+  proc draw(drawing: Drawing) =
     # Clear screen
-    drw.clear(rgb(0, 0, 0))
+    drawing.clear(color(0.1, 0.1, 0.15))
 
     # Draw shapes
-    drw.drawRect(10, 10, 100, 50, rgb(255, 0, 0))
-    drw.drawCircle(200, 200, 50, rgb(0, 255, 0))
+    drawing.drawRect(10, 10, 100, 50, color(1.0, 0, 0))
+    drawing.drawCircle(200, 200, 50, color(0, 1.0, 0))
 
     # Draw text
-    drw.drawText(10, 10, "Score: 100", rgb(255, 255, 255))
+    drawing.drawText(10, 10, "Score: 100")
 
     # Draw texture
-    drw.drawTexture(texture, x: 100, y: 100, w: 64, h: 64)
-```
-
-### Custom Game State with Plugins
-
-Use `state` for plugin specific state:
-
-```nim
-type
-  ScoreManager = object
-    score: int
-    lives: int
-
-plugin ScoreManager:
-  state = ScoreManager()
-
-  proc update(input: Input, state: var ScoreManager) =
-    # Direct access to score and lives
-    if input.isPressed("collect"):
-      score += 10
-
-  proc draw(drw: Drawing, state: ScoreManager) =
-    drw.drawText(10, 10, "Score: " & $state.score)
-    drw.drawText(10, 30, "Lives: " & $state.lives)
+    drawing.drawTexture(texture, x: 100, y: 100, w: 64, h: 64)
 ```
 
 ### Logging
@@ -254,18 +300,24 @@ proc createGameState(): GameState =
   GameState(score: 0, paused: false)
 
 plugin GameLogic:
-  withFields(score, paused)
   order = 0
 
-  proc load(resources: Resources) =
+  proc load(resources: Resources, input: var Input) =
     info "Game starting"
     resources.load(Texture, "player.png", "player")
+    input.set("pause").key(SDLK_P)
+    input.set("restart").key(SDLK_R)
 
-  proc loadScene(scenes: SceneStack) =
+  proc loadScene(scenes: SceneStack, score: var int) =
     info "Loaded scene: ", scenes.currentScene()
     score = 0
 
-  proc update(input: Input, scenes: var SceneStack) =
+  proc update(
+    input: Input,
+    scenes: var SceneStack,
+    score: var int,
+    paused: var bool
+  ) =
     if not paused:
       score += 1
 
@@ -279,12 +331,12 @@ plugin GameLogic:
     if input.isPressed("escape"):
       quit = true
 
-  proc draw(drw: Drawing, resources: Resources) =
-    drw.clear(rgb(20, 20, 30))
-    drw.drawText(10, 10, "Score: " & $score)
+  proc draw(drawing: Drawing, score: int, paused: bool) =
+    drawing.clear(color(0.08, 0.08, 0.12))
+    drawing.drawText(10, 10, "Score: " & $score)
 
     if paused:
-      drw.drawText(400, 300, "PAUSED")
+      drawing.drawText(400, 300, "PAUSED")
 
 when isMainModule:
   let config = AppConfig(
@@ -348,6 +400,24 @@ plugin Third:
 ```
 
 Lower order values run first. Default order is 0.
+
+## Scene Macro
+
+The `scene` macro creates scene-specific plugins:
+
+```nim
+scene MenuScene:
+  proc loadScene() =
+    echo "Menu scene loaded"
+
+  proc update(input: Input) =
+    # Only runs when MenuScene is active
+    if input.isPressed("start"):
+      scenes.push("GameScene")
+
+  proc draw(drawing: Drawing) =
+    drawing.drawText(100, 100, "Main Menu")
+```
 
 ## Error Handling
 

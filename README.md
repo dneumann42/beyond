@@ -48,7 +48,6 @@ type
   GameState = object
     score: int
     playerName: string
-```
 
 proc createGameState(): GameState =
   GameState(score: 0, playerName: "Player")
@@ -94,7 +93,6 @@ Available hooks and their injected parameters:
 **load**
 - `resources: Resources` - Resource manager
 - `pluginStates: PluginStates` - Plugin state storage
-- Custom game state fields (via `withFields`)
 
 **loadScene**
 - `scenes: SceneStack` - Scene stack
@@ -204,25 +202,25 @@ plugin Renderer:
 
 ### Custom Game State with Plugins
 
-Use `withFields` to inject game state fields into plugins:
+Use `state` for plugin specific state:
 
 ```nim
 type
-  GameState = object
+  ScoreManager = object
     score: int
     lives: int
 
 plugin ScoreManager:
-  withFields(score, lives)
+  state = ScoreManager()
 
-  proc update(input: Input) =
+  proc update(input: Input, state: var ScoreManager) =
     # Direct access to score and lives
     if input.isPressed("collect"):
       score += 10
 
-  proc draw(drw: Drawing) =
-    drw.drawText(10, 10, "Score: " & $score)
-    drw.drawText(10, 30, "Lives: " & $lives)
+  proc draw(drw: Drawing, state: ScoreManager) =
+    drw.drawText(10, 10, "Score: " & $state.score)
+    drw.drawText(10, 30, "Lives: " & $state.lives)
 ```
 
 ### Logging

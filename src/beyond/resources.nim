@@ -1,5 +1,6 @@
-import std/[tables, logging]
+import std/[tables, logging, json, strformat]
 import sdl3, sdl3_ttf, sdl3_image
+import beyond/spriteAnimations as sp
 import drawing
 
 type
@@ -12,6 +13,7 @@ type
 
   Font* = Resource[TTF_Font]
   Texture* = Resource[SDL_Texture]
+  Animation* = Resource[sp.Animation]
 
   Resources* = ref object
     renderer: SDL_Renderer
@@ -58,3 +60,26 @@ proc setTextureFiltering*(resources: Resources, name: string, filtering: ScaleMo
   ## Nearest = sharp/pixelated, Linear = smooth/blended
   let texture = resources.get(Texture, name)
   setTextureFiltering(texture, filtering)
+
+proc load*(resources: Resources, T: typedesc[Animation], path, name: string) =
+  let js = readFile(path).parseJson()
+  let anim = load(sp.Animation, js)
+
+  # Store animation with .json suffix to avoid key collision with texture
+  let animKey = name & ".json"
+  resources.mapping[animKey] = AbstractResource Animation(
+    data: anim,
+    path: path,
+    name: animKey
+  )
+
+  # Automatically load the corresponding texture PNG
+  # Derive PNG path from JSON path (e.g., "path/anim.json" -> "path/anim.png")
+  let pngPath = path[0..^6] & ".png"  # Replace .json with .png
+  resources.load(Texture, pngPath, name)
+
+  info "Loaded animation: " & animKey
+
+proc get*(resources: Resources, T: typedesc[Animation], name: string): sp.Animation =
+  # Append .json suffix when getting animations
+  result = T(resources.mapping[name & ".json"]).data

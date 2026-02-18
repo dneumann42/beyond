@@ -102,13 +102,21 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
       input {.inject.} = gAppState.input
       scenes {.inject.} = gAppState.scenes
       pluginStates {.inject.} = gAppState.pluginStates
+      messages {.inject.} = gAppState.messages
 
     withFields(gAppState.state, gAppState):
-      generatePluginStep(load)
+      try:
+        generatePluginStep(load)
+      except CatchableError as e:
+        error "Exception during initialization: ", e.msg
+        error "Stack trace:\n", e.getStackTrace()
+        return SDL_APP_FAILURE
 
     gAppState.input = input
     gAppState.scenes = scenes
     gAppState.pluginStates = pluginStates
+    gAppState.messages = messages
+    
     return SDL_APP_CONTINUE
 
   proc SDL_AppIterate(appstate: pointer): SDL_AppResult {.cdecl, gcsafe.} =
@@ -145,20 +153,29 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
       fps {.inject.} = state.fps
       deltaTime {.inject.} = state.deltaTime
       paused {.inject.} = state.paused
+      messages {.inject.} = gAppState.messages
 
     state.scenes.startFrame()
     state.scenes.handlePushed()
 
     withFields(state.state, state):
-      generatePluginStep(loadScene)
-      generateListenStep(state.messages)
-      if not state.paused:
-        generatePluginStep(update)
-      generatePluginStep(alwaysUpdate)
+      try:
+        generatePluginStep(loadScene)
+        generateListenStep(state.messages)
+        if not state.paused:
+          generatePluginStep(update)
+        generatePluginStep(alwaysUpdate)
+      except CatchableError as e:
+        error "Exception in update loop: ", e.msg
+        error "Stack trace:\n", e.getStackTrace()
+        return SDL_APP_FAILURE
 
     state.scenes = scenes
+    state.messages = messages
     state.pluginStates = pluginStates
     state.paused = paused 
+    
+    state.messages.lateUpdate()
 
     if quit:
       return SDL_APP_SUCCESS
@@ -169,12 +186,22 @@ template generateApplication[T](cfg: AppConfig, initialState: T): auto =
 
     var drawing {.inject.} = state.drawing
     withFields(state.state, state):
-      generatePluginStep(draw)
+      try:
+        generatePluginStep(draw)
+      except CatchableError as e:
+        error "Exception in draw loop: ", e.msg
+        error "Stack trace:\n", e.getStackTrace()
+        return SDL_APP_FAILURE
 
     state.pluginStates = pluginStates
 
     # Draw all canvases after scene drawing
-    state.drawing.drawCanvases()
+    try:
+      state.drawing.drawCanvases()
+    except CatchableError as e:
+      error "Exception drawing canvases: ", e.msg
+      error "Stack trace:\n", e.getStackTrace()
+      return SDL_APP_FAILURE
 
     discard SDL_RenderPresent(state.renderer)
 

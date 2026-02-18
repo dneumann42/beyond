@@ -65,8 +65,10 @@ type
     Playing
     Paused
     Stopped
+
   Animator* = object
     animations: Table[string, Animation]
+    speed*: float = 1.0
     currentAnimation: string
     currentAnimationState: AnimationState
     currentFrame: string
@@ -122,7 +124,7 @@ proc setFrame*(animator: var Animator, frame: string) =
 
 proc update*(animator: var Animator, deltaTime: float) =
   if animator.currentAnimationState == Playing:
-    animator.currentTime += int(deltaTime * 1000.0)
+    animator.currentTime += int(deltaTime * 1000.0 * animator.speed)
     withIt(animator.frame(), frame):
       if animator.currentTime >= frame.duration:
         animator.setFrame(animator.nextFrameName())

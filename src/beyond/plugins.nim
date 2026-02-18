@@ -61,20 +61,22 @@ proc init*(T: typedesc[PluginMessages]): T =
   T(queue: @[])
 
 proc send*[T](msg: var PluginMessages, payload: T) =
-  let m = Message[T](payload: payload, typeName: T.name)
+  let m = Message[T](payload: payload, typeName: $T.name)
   msg.queue.add(AbstractMessage(m))
 
 proc recv*[T](msg: var PluginMessages, Ty: typedesc[T]): Option[Ty] =
-  for m in msg.queue:
-    if m.typeName == Ty.name:
+  for m in msg.queue.mitems:
+    if m.handled:
+      continue
+    if m.typeName == $Ty.name:
       return some(Message[Ty](m).payload)
 
 proc lateUpdate*(msg: var PluginMessages) =
-  msg.queue.setLen(0)
+  msg.queue.keepIf(proc(m: AbstractMessage): auto = not m.handled)
 
 proc handle*[T](msg: var PluginMessages, Ty: typedesc[T]) =
   for m in msg.queue.mitems:
-    if m.typeName == Ty.name:
+    if m.typeName == $Ty.name:
       m.handled = true 
 
 proc new*(T: typedesc[SceneStack]): T =

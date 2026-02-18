@@ -4,6 +4,9 @@ export application, plugins, drawing, sdl3_image, sdl3_ttf, tilesheets, resource
 import beyond/inputs
 export inputs
 
+import beyond/messages
+export messages
+
 import beyond/base
 export base
 
